@@ -10,40 +10,41 @@ const { speak, stop } = require('./tts');
 
 class IVR {
   /**
-   * @param {{ onLeave: Function }} callbacks
+   * @param {{ onLeave: Function, onSpeak: Function }} callbacks
    */
-  constructor({ onLeave } = {}) {
+  constructor({ onLeave, onSpeak } = {}) {
     this._state = 'idle';
     this._onLeave = onLeave || (() => { });
+    this._onSpeak = onSpeak || speak;
 
     // Keyword → handler map. Keys are lowercase substrings to match.
     this._intents = [
       {
         keywords: ['hello', 'hi', 'hey'],
-        action: () => speak('Hello! I am the IVR assistant. How can I help you?'),
+        action: () => this._onSpeak('Hello! I am the IVR assistant. How can I help you?'),
       },
       {
         keywords: ['help', 'support', 'assist'],
-        action: () => speak('For support, please stay on the line. A representative will join shortly.'),
+        action: () => this._onSpeak('For support, please stay on the line. A representative will join shortly.'),
       },
       {
         keywords: ['bye', 'goodbye', 'leave', 'exit', 'disconnect'],
         action: async () => {
-          await speak('Goodbye! Have a great day.');
+          await this._onSpeak('Goodbye! Have a great day.');
           this._onLeave();
         },
       },
       {
         keywords: ['sales', 'buy', 'pricing'],
-        action: () => speak('Connecting you to the sales department.'),
+        action: () => this._onSpeak('Connecting you to the sales department.'),
       },
       {
         keywords: ['technical support', 'tech support', 'broken', 'issue'],
-        action: () => speak('Connecting you to technical support.'),
+        action: () => this._onSpeak('Connecting you to technical support.'),
       },
       {
         keywords: ['billing', 'invoice', 'payment'],
-        action: () => speak('Connecting you to the billing department.'),
+        action: () => this._onSpeak('Connecting you to the billing department.'),
       },
     ];
   }
@@ -57,7 +58,7 @@ class IVR {
    */
   async onJoin() {
     this._state = 'greeted';
-    await speak(
+    await this._onSpeak(
       'Hello! Welcome to Chag-han Video IVR. ' +
       'Say help for support, say sales for the sales department, say technical support for tech support, ' +
       'or say goodbye to disconnect me.'
@@ -95,7 +96,7 @@ class IVR {
       await matchedAction();
     } else {
       // No intent matched — default fallback
-      await speak(`I heard: ${text}. I'm sorry, I didn't understand that. Please try again.`);
+      await this._onSpeak(`I heard: ${text}. I'm sorry, I didn't understand that. Please try again.`);
     }
 
     // Wait 1 second for speakers to physically finish and room echo to fade

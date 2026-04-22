@@ -1,0 +1,24 @@
+{
+  "name": "mediasoup-sfu",
+  "version": "1.0.0",
+  "private": true,
+  "description": "mediasoup SFU — signal service + React client",
+  "scripts": {
+    "dev": "concurrently \"npm run dev:signal\" \"npm run dev:ivr\" \"npm run dev:client\"",
+    "dev:signal": "npm run dev --prefix signal-service",
+    "dev:ivr": "npm run dev --prefix ivr-service",
+    "dev:client": "npm run dev --prefix client",
+
+    "build": "npm run build:client",
+    "build:client": "npm run build --prefix client",
+
+    "start": "npm start --prefix signal-service",
+
+    "install:all": "npm install --prefix signal-service && npm install --prefix ivr-service && npm install --prefix client",
+
+    "deploy": "npm run build && NODE_ENV=production npm start"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}

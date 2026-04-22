@@ -1,0 +1,84 @@
+name: Deploy to Ubuntu Server
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies and Build Client
+        run: |
+          npm ci
+          cd client && npm ci && npm run build
+
+      - name: Compress Source Code
+        run: |
+          # Exclude node_modules to avoid huge transfers and architecture mismatch
+          # Include the client/dist build output
+          zip -r deploy.zip . -x "**/node_modules/*" -x ".git/*" -x ".github/*"
+
+      - name: Transfer to Server via SCP
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USERNAME }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          source: "deploy.zip"
+          target: "/tmp/mediasoup-deploy"
+
+      - name: Execute Remote SSH Commands
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USERNAME }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          script: |
+            # Set the deployment directory
+            DEPLOY_DIR="/var/www/mediasoup-server"
+            
+            # Ensure the target directory exists
+            mkdir -p $DEPLOY_DIR
+            
+            # Unzip the uploaded code, overwriting existing files
+            unzip -o /tmp/mediasoup-deploy/deploy.zip -d $DEPLOY_DIR
+            
+            # Clean up the zip
+            rm /tmp/mediasoup-deploy/deploy.zip
+            
+            cd $DEPLOY_DIR
+            
+            # Install global PM2 if not present
+            if ! command -v pm2 &> /dev/null; then
+              echo "Installing pm2 globally..."
+              npm install -g pm2
+            fi
+            
+            # Install dependencies locally on the Ubuntu server.
+            # This is critical for Mediasoup to build its C++ native extensions
+            # for the specific server CPU architecture.
+            echo "Installing root dependencies..."
+            npm install
+            
+            echo "Installing signal-service dependencies..."
+            cd signal-service && npm install && cd ..
+            
+            echo "Installing ivr-service dependencies..."
+            cd ivr-service && npm install && cd ..
+            
+            # Start or restart PM2 services using the ecosystem file
+            pm2 start ecosystem.config.js --env production
+            
+            # Save the PM2 process list so it respawns on server reboot
+            pm2 save

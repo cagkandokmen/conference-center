@@ -84,6 +84,10 @@ jobs:
             echo "Installing ivr-service dependencies..."
             cd ivr-service && npm install && cd ..
             
+            # Allow Node.js to bind to protected ports (like 443 for HTTPS) without running as root
+            echo "Granting Node.js permission to bind to port 443..."
+            sudo setcap 'cap_net_bind_service=+ep' $(which node)
+            
             # Start or restart PM2 services using the ecosystem file
             pm2 start ecosystem.config.js --env production
             

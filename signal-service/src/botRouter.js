@@ -102,13 +102,6 @@ router.post('/join', async (req, res) => {
       }
     }
 
-    // ── Create producer (bot's voice) ─────────────────────────────────────
-    // The IVR service will connect its UDP source to the send transport.
-    // We pre-connect the send transport so the IVR knows where to send RTP.
-    await sendTransport.connect({
-      ip: '127.0.0.1',
-      port: 0, // comedia disabled — IVR will call /connect once its port is known
-    }).catch(() => { }); // may fail until IVR sends first packet if comedia
 
     // Return everything the IVR service needs
     res.json({

@@ -94,6 +94,22 @@ class Bot {
           roomId: this.roomId, botId: this.botId, ip: '127.0.0.1', port: localSendPort
         }).then(() => console.log(`[Bot] Send transport connected successfully`));
         
+        // 5. Create audio producer so participants can hear the bot
+        const { data: producerData } = await axios.post(`${SIGNAL_URL}/api/bot/produce`, {
+          roomId: this.roomId,
+          botId: this.botId,
+          rtpParameters: {
+            codecs: [{
+              mimeType: 'audio/opus',
+              payloadType: 111,
+              clockRate: 48000,
+              channels: 1,
+            }],
+            encodings: [{ ssrc: this._ssrc }]
+          }
+        });
+        console.log(`[Bot] Audio producer created: ${producerData.producerId}`);
+        
         // Store remote mediasoup target for our outgoing RTP
         this._remoteTarget = { ip: remoteIp, port: sendPort };
       });

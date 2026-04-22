@@ -4,7 +4,7 @@ import { useMediasoup } from '../hooks/useMediasoup'
 import VideoTile from '../components/VideoTile'
 import ControlBar from '../components/ControlBar'
 
-const IVR_URL = import.meta.env.VITE_IVR_URL || 'http://localhost:3002'
+const IVR_URL = '/api/ivr'
 
 export default function RoomPage() {
   const { roomId } = useParams()

@@ -33,6 +33,30 @@ app.use(express.json());
 // ─── Health check ──────────────────────────────────────────────────────────
 app.get('/health', (_, res) => res.json({ status: 'ok', env: isProd ? 'production' : 'development' }));
 
+// ─── IVR Proxy ──────────────────────────────────────────────────────────────
+// This proxies requests from the client to the internal IVR service (port 3002).
+// This prevents having to expose the IVR service publicly.
+app.post('/api/ivr/:action', async (req, res) => {
+  const { action } = req.params;
+  if (!['join', 'leave'].includes(action)) {
+    return res.status(404).send('Not found');
+  }
+
+  try {
+    const ivrUrl = process.env.IVR_SERVICE_URL || 'http://localhost:3002';
+    const response = await fetch(`${ivrUrl}/${action}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(req.body)
+    });
+    const data = await response.text();
+    res.status(response.status).send(data);
+  } catch (err) {
+    console.error(`[IVR Proxy] Error forwarding ${action}:`, err.message);
+    res.status(500).json({ error: 'IVR Service unreachable' });
+  }
+});
+
 // ─── SPA fallback (production) ────────────────────────────────────────────
 // All non-API/socket routes return index.html so React Router works.
 if (isProd && fs.existsSync(clientDist)) {

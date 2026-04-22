@@ -61,10 +61,15 @@ class Bot {
       console.log(`[Bot] Bot ID: ${this.botId}`);
       console.log(`[Bot] Recv port: ${recvPort}, Send port: ${sendPort}`);
 
-      // 2. Init STT
+      // 2. Extract Opus codec from router capabilities to match exactly
+      const opusCodec = data.rtpCapabilities.codecs.find(c => c.mimeType.toLowerCase() === 'audio/opus');
+      this._payloadType = opusCodec ? opusCodec.preferredPayloadType : 111;
+      const channels = opusCodec ? opusCodec.channels : 2;
+
+      // 3. Init STT
       await this._stt.init();
 
-      // 3. Setup IVR events
+      // 4. Setup IVR events
       this._stt.on('final', async ({ text }) => {
         if (this._active) await this._ivr.onTranscript(text);
       });
@@ -73,7 +78,7 @@ class Bot {
         if (text) process.stdout.write(`\r[STT partial] ${text}   `);
       });
 
-      // 4. Setup UDP sockets
+      // 5. Setup UDP sockets
       this._recvSocket = dgram.createSocket('udp4');
       this._sendSocket = dgram.createSocket('udp4');
 
@@ -94,16 +99,16 @@ class Bot {
           roomId: this.roomId, botId: this.botId, ip: '127.0.0.1', port: localSendPort
         }).then(() => console.log(`[Bot] Send transport connected successfully`));
         
-        // 5. Create audio producer so participants can hear the bot
+        // 6. Create audio producer so participants can hear the bot
         const { data: producerData } = await axios.post(`${SIGNAL_URL}/api/bot/produce`, {
           roomId: this.roomId,
           botId: this.botId,
           rtpParameters: {
             codecs: [{
               mimeType: 'audio/opus',
-              payloadType: 111,
+              payloadType: this._payloadType,
               clockRate: 48000,
-              channels: 1,
+              channels: channels,
             }],
             encodings: [{ ssrc: this._ssrc }]
           }
@@ -169,7 +174,7 @@ class Bot {
           
           // Build RTP packet
           const packet = buildRtp({
-            payloadType: 111, // Opus
+            payloadType: this._payloadType || 111, // Use dynamic payload type
             sequenceNumber: this._sequenceNumber++,
             timestamp: this._timestamp,
             ssrc: this._ssrc,

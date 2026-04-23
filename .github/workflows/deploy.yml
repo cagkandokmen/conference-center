@@ -7,9 +7,9 @@ on:
   workflow_dispatch:
 
 jobs:
-  deploy:
+  deploy-signal:
+    name: Deploy Signal Service (Instance A)
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -25,12 +25,9 @@ jobs:
           cd client && npm ci && npm run build
 
       - name: Compress Source Code
-        run: |
-          # Exclude node_modules to avoid huge transfers and architecture mismatch
-          # Include the client/dist build output
-          zip -r deploy.zip . -x "**/node_modules/*" -x ".git/*" -x ".github/*"
+        run: zip -r deploy.zip . -x "**/node_modules/*" -x ".git/*" -x ".github/*"
 
-      - name: Transfer to Server via SCP
+      - name: Transfer to Main Server (Instance A)
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.SERVER_HOST }}
@@ -39,57 +36,62 @@ jobs:
           source: "deploy.zip"
           target: "/tmp/mediasoup-deploy"
 
-      - name: Execute Remote SSH Commands
+      - name: Execute Remote SSH Commands (Instance A)
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USERNAME }}
           key: ${{ secrets.SERVER_SSH_KEY }}
           script: |
-            # Set the deployment directory
             DEPLOY_DIR="/home/ubuntu/mediasoup-server"
-            
-            # Ensure the target directory exists
             mkdir -p $DEPLOY_DIR
-            
-            # Install unzip if it's missing
-            if ! command -v unzip &> /dev/null; then
-              echo "Installing unzip..."
-              sudo apt-get update && sudo apt-get install -y unzip
-            fi
-            
-            # Unzip the uploaded code, overwriting existing files
             unzip -o /tmp/mediasoup-deploy/deploy.zip -d $DEPLOY_DIR
-            
-            # Clean up the zip
             rm /tmp/mediasoup-deploy/deploy.zip
-            
             cd $DEPLOY_DIR
-            
-            # Install global PM2 if not present
-            if ! command -v pm2 &> /dev/null; then
-              echo "Installing pm2 globally..."
-              npm install -g pm2
-            fi
-            
-            # Install dependencies locally on the Ubuntu server.
-            # This is critical for Mediasoup to build its C++ native extensions
-            # for the specific server CPU architecture.
-            echo "Installing root dependencies..."
             npm install
-            
-            echo "Installing signal-service dependencies..."
             cd signal-service && npm install && cd ..
-            
-            echo "Installing ivr-service dependencies..."
-            cd ivr-service && npm install && cd ..
-            
-            # Allow Node.js to bind to protected ports (like 443 for HTTPS) without running as root
-            echo "Granting Node.js permission to bind to port 443..."
             sudo setcap 'cap_net_bind_service=+ep' $(which node)
-            
-            # Start or restart PM2 services using the ecosystem file
-            pm2 start ecosystem.config.js --env production
-            
-            # Save the PM2 process list so it respawns on server reboot
+            pm2 start ecosystem.config.js --only signal-service --env production
+            pm2 save
+
+  deploy-ivr:
+    name: Deploy IVR Service (Instance B)
+    runs-on: ubuntu-latest
+    needs: deploy-signal
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Compress Source Code
+        run: zip -r deploy.zip . -x "**/node_modules/*" -x ".git/*" -x ".github/*"
+
+      - name: Transfer to IVR Server (Instance B)
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.IVR_SERVER_HOST }}
+          username: ${{ secrets.IVR_SERVER_USERNAME }}
+          key: ${{ secrets.IVR_SERVER_SSH_KEY }}
+          source: "deploy.zip"
+          target: "/tmp/mediasoup-deploy"
+
+      - name: Execute Remote SSH Commands (Instance B)
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.IVR_SERVER_HOST }}
+          username: ${{ secrets.IVR_SERVER_USERNAME }}
+          key: ${{ secrets.IVR_SERVER_SSH_KEY }}
+          script: |
+            DEPLOY_DIR="/home/ubuntu/mediasoup-server"
+            mkdir -p $DEPLOY_DIR
+            unzip -o /tmp/mediasoup-deploy/deploy.zip -d $DEPLOY_DIR
+            rm /tmp/mediasoup-deploy/deploy.zip
+            cd $DEPLOY_DIR
+            npm install
+            cd ivr-service && npm install && cd ..
+            pm2 start ecosystem.config.js --only ivr-service --env production
             pm2 save

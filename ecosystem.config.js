@@ -13,6 +13,8 @@ module.exports = {
         MEDIASOUP_ANNOUNCED_IP: '193.122.62.211',
         SSL_CERT: '/etc/letsencrypt/live/cagkanvideo.duckdns.org/fullchain.pem',
         SSL_KEY: '/etc/letsencrypt/live/cagkanvideo.duckdns.org/privkey.pem',
+        // Signal server sends commands to the Bot on its Private IP
+        IVR_SERVICE_URL: 'http://10.0.0.146:3002',
       },
     },
     {
@@ -24,10 +26,9 @@ module.exports = {
       env_production: {
         NODE_ENV: 'production',
         PORT: 3002,
-        // Use the public domain so SSL certificates match correctly
+        // Bot sends signals back to the Signal Server via its Public Domain
         INTERNAL_SIGNAL_URL: 'https://cagkanvideo.duckdns.org',
-        // Update this path to where you placed the model on the Ubuntu server!
-        VOSK_MODEL_PATH: './models/vosk-model-small-en-us-0.15',
+        VOSK_MODEL_PATH: './model',
       },
     },
   ],

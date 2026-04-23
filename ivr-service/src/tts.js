@@ -12,9 +12,9 @@ const defaultVoice = process.platform === 'darwin' ? 'Samantha' : null;
 function speakToFile(text, filename, { voice = defaultVoice, speed = 1.0 } = {}) {
   return new Promise((resolve, reject) => {
     console.log(`[TTS] Exporting to file: "${text}" -> ${filename}`);
+    const { spawn } = require('child_process');
     
     if (process.platform === 'darwin') {
-      const { spawn } = require('child_process');
       const args = ['-o', filename, '--data-format=LEI16@48000', text];
       if (voice) args.unshift('-v', voice);
       
@@ -25,13 +25,13 @@ function speakToFile(text, filename, { voice = defaultVoice, speed = 1.0 } = {})
         else reject(new Error(`say command failed with code ${code}`));
       });
     } else {
-      say.export(text, voice, speed, filename, (err) => {
-        if (err) {
-          console.error(`[TTS] Export Error: ${err.message}`);
-          reject(err);
-        } else {
-          resolve();
-        }
+      // Ubuntu / Linux (Directly use espeak to bypass the buggy say.js wrapper)
+      // -w writes to wav file, -s 150 is normal speed
+      const child = spawn('espeak', ['-w', filename, '-s', '150', text]);
+      child.on('error', reject);
+      child.on('close', (code) => {
+        if (code === 0) resolve();
+        else reject(new Error(`espeak failed with code ${code}`));
       });
     }
   });

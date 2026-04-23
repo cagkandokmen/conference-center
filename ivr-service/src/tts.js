@@ -1,43 +1,39 @@
 const say = require('say');
-const path = require('path');
-const fs = require('fs');
-
-/**
- * Speak text via system TTS.
- * @param {string} text
- * @param {object} [opts]
- * @returns {Promise<void>}
- */
-function speak(text, { voice = 'Samantha', speed = 1.0 } = {}) {
-  return new Promise((resolve, reject) => {
-    console.log(`[TTS] Speaking: "${text}"`);
-    say.speak(text, voice, speed, (err) => {
-      if (err) {
-        console.error(`[TTS] Error: ${err.message}`);
-        reject(err);
-      } else {
-        resolve();
-      }
-    });
-  });
-}
 
 /**
  * Export speech to a WAV file.
- * @param {string} text 
- * @param {string} filename 
+ * say.js uses:
+ *   macOS  → built-in `say`
+ *   Linux  → `espeak`
+ *   Windows → SAPI
  */
-function speakToFile(text, filename, { voice = null, speed = 1.0 } = {}) {
+const defaultVoice = process.platform === 'darwin' ? 'Samantha' : null;
+
+function speakToFile(text, filename, { voice = defaultVoice, speed = 1.0 } = {}) {
   return new Promise((resolve, reject) => {
     console.log(`[TTS] Exporting to file: "${text}" -> ${filename}`);
-    say.export(text, voice, speed, filename, (err) => {
-      if (err) {
-        console.error(`[TTS] Export Error: ${err.message}`);
-        reject(err);
-      } else {
-        resolve();
-      }
-    });
+    
+    if (process.platform === 'darwin') {
+      const { spawn } = require('child_process');
+      const args = ['-o', filename, '--data-format=LEI16@48000', text];
+      if (voice) args.unshift('-v', voice);
+      
+      const child = spawn('say', args);
+      child.on('error', reject);
+      child.on('close', (code) => {
+        if (code === 0) resolve();
+        else reject(new Error(`say command failed with code ${code}`));
+      });
+    } else {
+      say.export(text, voice, speed, filename, (err) => {
+        if (err) {
+          console.error(`[TTS] Export Error: ${err.message}`);
+          reject(err);
+        } else {
+          resolve();
+        }
+      });
+    }
   });
 }
 
@@ -48,4 +44,4 @@ function stop() {
   try { say.stop(); } catch (_) {}
 }
 
-module.exports = { speak, speakToFile, stop };
+module.exports = { speakToFile, stop };

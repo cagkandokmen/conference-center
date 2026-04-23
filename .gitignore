@@ -5,3 +5,7 @@ dist/
 build/
 coverage/
 *.log
+ivr-service/temp/
+ivr-service/model/
+ivr-service/*.wav
+ivr-service/test_encode.js

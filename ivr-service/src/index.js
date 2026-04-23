@@ -103,3 +103,12 @@ async function shutdown() {
 process.once('SIGUSR2', shutdown); // nodemon restart
 process.once('SIGINT', shutdown);  // Ctrl+C
 process.once('SIGTERM', shutdown); // Kill command
+
+// ── Global Error Handling (prevents crashes) ──────────────────────────────
+process.on('uncaughtException', (err) => {
+  console.error('[IVR] Uncaught Exception:', err);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('[IVR] Unhandled Rejection at:', promise, 'reason:', reason);
+});

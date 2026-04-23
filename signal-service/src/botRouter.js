@@ -237,6 +237,16 @@ router.post('/produce', async (req, res) => {
     producer.on('transportclose', () => botPeer.removeProducer(producer.id));
 
     console.log(`[Bot] Producer created: ${producer.id} in room ${roomId}`);
+    
+    // Notify connected clients that the bot has a new audio producer
+    if (_io) {
+      _io.to(roomId).emit('newProducer', {
+        producerId: producer.id,
+        producerPeerId: botId,
+        kind: producer.kind
+      });
+    }
+
     res.json({ producerId: producer.id });
   } catch (err) {
     console.error('[Bot] produce error:', err.message);

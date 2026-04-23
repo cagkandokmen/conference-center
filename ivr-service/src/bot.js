@@ -9,7 +9,7 @@ const fs = require('fs');
 const path = require('path');
 const { spawn } = require('child_process');
 const { OpusEncoder } = require('@discordjs/opus');
-const { buildRtp } = require('./rtp');
+const { buildRtp, parseRtp } = require('./rtp');
 const IVR = require('./ivr');
 const STT = require('./stt');
 
@@ -27,6 +27,7 @@ class Bot {
     this.botId = null;
     this._onLeaveCallback = onLeaveCallback;
     this._sendSocket = null;
+    this._recvSocket = null;
     this._ivr = new IVR({
       onLeave: () => this.leave(),
       onSpeak: (text) => this.speakToRoom(text)
@@ -83,6 +84,24 @@ class Bot {
         this._remoteTarget = { ip: remoteIp, port: sendPort };
       });
 
+      // ── Recv UDP Socket (mediasoup → Bot) ──────────────────────────────
+      this._recvSocket = dgram.createSocket('udp4');
+      this._recvSocket.on('message', (buf) => {
+        const rtp = parseRtp(buf);
+        if (rtp && this._active) {
+          // In lightweight mode we just drop it or feed stub
+          this._stt.feed(rtp.payload);
+        }
+      });
+
+      this._recvSocket.bind(0, '127.0.0.1', async () => {
+        const localRecvPort = this._recvSocket.address().port;
+        console.log(`[Bot] UDP recv bound on 127.0.0.1:${localRecvPort}`);
+        await axios.post(`${SIGNAL_URL}/api/bot/connect-recv`, {
+          roomId: this.roomId, botId: this.botId, ip: '127.0.0.1', port: localRecvPort
+        });
+      });
+
       this._active = true;
       await this._ivr.onJoin();
 
@@ -136,6 +155,7 @@ class Bot {
     this._active = false;
     console.log(`[Bot] Leaving room ${this.roomId}...`);
     this._sendSocket?.close();
+    this._recvSocket?.close();
     try {
       await axios.post(`${SIGNAL_URL}/api/bot/leave`, { roomId: this.roomId, botId: this.botId });
     } catch (err) {}

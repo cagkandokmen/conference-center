@@ -11,6 +11,10 @@ class STT extends EventEmitter {
     console.log('[STT] Lightweight mode: STT engine disabled.');
   }
   feed(pcm) {}
+  inject(text) {
+    console.log(`[STT] Injected text: "${text}"`);
+    this.emit('transcript', text);
+  }
   reset() {}
   close() {}
 }

@@ -54,7 +54,7 @@ router.post('/join', async (req, res) => {
 
     // ── Recv PlainTransport (mediasoup → IVR: bot hears participants) ──────
     const recvTransport = await room.router.createPlainTransport({
-      listenIp: { ip: '127.0.0.1', announcedIp: null },
+      listenIp: { ip: process.env.MEDIASOUP_LISTEN_IP || '127.0.0.1', announcedIp: null },
       rtcpMux: true,
       comedia: false,
       appData: { direction: 'recv', botId },
@@ -62,7 +62,7 @@ router.post('/join', async (req, res) => {
 
     // ── Send PlainTransport (IVR → mediasoup: bot speaks) ─────────────────
     const sendTransport = await room.router.createPlainTransport({
-      listenIp: { ip: '127.0.0.1', announcedIp: null },
+      listenIp: { ip: process.env.MEDIASOUP_LISTEN_IP || '127.0.0.1', announcedIp: null },
       rtcpMux: true,
       comedia: false,
       appData: { direction: 'send', botId },

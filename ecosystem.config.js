@@ -9,7 +9,7 @@ module.exports = {
       env_production: {
         NODE_ENV: 'production',
         PORT: 443,
-        MEDIASOUP_LISTEN_IP: '0.0.0.0',
+        MEDIASOUP_LISTEN_IP: '10.0.0.233',
         MEDIASOUP_ANNOUNCED_IP: '193.122.62.211',
         SSL_CERT: '/etc/letsencrypt/live/cagkanvideo.duckdns.org/fullchain.pem',
         SSL_KEY: '/etc/letsencrypt/live/cagkanvideo.duckdns.org/privkey.pem',

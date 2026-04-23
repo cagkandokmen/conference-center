@@ -62,15 +62,13 @@ class Bot {
       const channels = opusCodec ? opusCodec.channels : 2;
 
       // 3. Setup Sockets
-      this._sendSocket = dgram.createSocket('udp4');
-      this._recvSocket = dgram.createSocket('udp4');
-
       const getRandomPort = () => Math.floor(Math.random() * 10000) + 40000;
 
       // 4. Connect Transports
       let sendPortFound = false;
       while (!sendPortFound) {
         try {
+          this._sendSocket = dgram.createSocket('udp4');
           const p = getRandomPort();
           await new Promise((resolve, reject) => {
             this._sendSocket.once('error', reject);
@@ -80,7 +78,9 @@ class Bot {
             });
           });
           sendPortFound = true;
-        } catch (e) {}
+        } catch (e) {
+          try { this._sendSocket.close(); } catch (_) {}
+        }
       }
 
       await axios.post(`${SIGNAL_URL}/api/bot/connect-send`, {
@@ -90,6 +90,7 @@ class Bot {
       let recvPortFound = false;
       while (!recvPortFound) {
         try {
+          this._recvSocket = dgram.createSocket('udp4');
           const p = getRandomPort();
           await new Promise((resolve, reject) => {
             this._recvSocket.once('error', reject);
@@ -99,7 +100,9 @@ class Bot {
             });
           });
           recvPortFound = true;
-        } catch (e) {}
+        } catch (e) {
+          try { this._recvSocket.close(); } catch (_) {}
+        }
       }
 
       await axios.post(`${SIGNAL_URL}/api/bot/connect-recv`, {
@@ -122,18 +125,18 @@ class Bot {
       let lastLogTime = 0;
 
       this._recvSocket.on('message', (buf) => {
+        recvCount++;
+        const now = Date.now();
+        if (now - lastLogTime > 2000) {
+          console.log(`[Bot Debug] Socket received ${recvCount} raw UDP packets.`);
+          lastLogTime = now;
+        }
+
         // CPU SAVER: Ignore user audio while bot is talking to save CPU for the voice
         if (this._isSpeaking) return;
 
         const rtp = parseRtp(buf);
         if (rtp && this._active) {
-          recvCount++;
-          const now = Date.now();
-          if (now - lastLogTime > 2000) {
-            console.log(`[Bot Debug] Received ${recvCount} UDP packets. Last PayloadType: ${rtp.payloadType}`);
-            lastLogTime = now;
-          }
-
           // Ignore RTCP control packets
           if (rtp.payloadType >= 200) return;
 
@@ -141,7 +144,7 @@ class Bot {
             const pcm = this._encoder.decode(rtp.payload);
             this._stt.feed(pcm);
           } catch (e) {
-            if (recvCount % 50 === 1) {
+            if (recvCount % 100 === 1) {
               console.error(`[Bot Debug] Opus Decode Error (PT=${rtp.payloadType}):`, e.message);
             }
           }

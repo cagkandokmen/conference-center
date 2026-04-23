@@ -32,7 +32,7 @@ class Bot {
     this._ssrc = Math.floor(Math.random() * 0xFFFFFFFF);
     this._sequenceNumber = 0;
     this._timestamp = 0;
-    this._payloadType = 111;
+    this._payloadType = 101;
 
     // Components
     this._stt = new STT();
@@ -135,6 +135,7 @@ class Bot {
 
       const CHUNK_SIZE = 960 * 2; // 20ms
       let buffer = Buffer.alloc(0);
+      let lastSendTime = Date.now();
 
       try {
         // Use async iterator to properly throttle the stream
@@ -149,7 +150,6 @@ class Bot {
             buffer = buffer.subarray(CHUNK_SIZE);
             
             try {
-              // opusscript encode takes exactly the chunk, requires pcm copy for memory alignment and 960 sample count
               const pcmCopy = Buffer.from(pcm);
               const opus = this._encoder.encode(pcmCopy, 960);
               const packet = buildRtp({
@@ -168,6 +168,13 @@ class Bot {
             }
 
             // PACE THE AUDIO: Wait 20ms before sending the next 20ms chunk
+            const now = Date.now();
+            const delta = now - lastSendTime;
+            if (delta > 30) {
+              console.warn(`[Bot] ⚠️ Timing Jitter: ${delta}ms (Expected 20ms)`);
+            }
+            lastSendTime = now;
+
             await new Promise(resolve => setTimeout(resolve, 20));
           }
         }

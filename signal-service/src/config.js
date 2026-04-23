@@ -22,6 +22,7 @@ module.exports = {
         mimeType: 'audio/opus',
         clockRate: 48000,
         channels: 2,
+        preferredPayloadType: 101,
       },
       {
         kind: 'video',

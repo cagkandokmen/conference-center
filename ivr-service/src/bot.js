@@ -118,16 +118,33 @@ class Bot {
       console.log(`[Bot] Audio producer created: ${producerData.producerId}`);
 
       // 6. Start Receiving
+      let recvCount = 0;
+      let lastLogTime = 0;
+
       this._recvSocket.on('message', (buf) => {
         // CPU SAVER: Ignore user audio while bot is talking to save CPU for the voice
         if (this._isSpeaking) return;
 
         const rtp = parseRtp(buf);
         if (rtp && this._active) {
+          recvCount++;
+          const now = Date.now();
+          if (now - lastLogTime > 2000) {
+            console.log(`[Bot Debug] Received ${recvCount} UDP packets. Last PayloadType: ${rtp.payloadType}`);
+            lastLogTime = now;
+          }
+
+          // Ignore RTCP control packets
+          if (rtp.payloadType >= 200) return;
+
           try {
             const pcm = this._encoder.decode(rtp.payload);
             this._stt.feed(pcm);
-          } catch (e) {}
+          } catch (e) {
+            if (recvCount % 50 === 1) {
+              console.error(`[Bot Debug] Opus Decode Error (PT=${rtp.payloadType}):`, e.message);
+            }
+          }
         }
       });
 

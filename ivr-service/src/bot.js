@@ -89,6 +89,9 @@ class Bot {
 
       // 6. Start Receiving
       this._recvSocket.on('message', (buf) => {
+        // CPU SAVER: Ignore user audio while bot is talking to save CPU for the voice
+        if (this._isSpeaking) return;
+
         const rtp = parseRtp(buf);
         if (rtp && this._active) {
           try {
@@ -115,17 +118,15 @@ class Bot {
   }
 
   async speakToRoom(text) {
-    if (!this._active || !this._remoteTarget) return;
+    if (!this._active) return;
+    this._isSpeaking = true; // PAUSE STT ENGINE
 
-    const tmpDir = path.resolve(__dirname, '../temp');
-    if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true });
-    const tmpWav = path.join(tmpDir, `tts_${this.botId}.wav`);
-    
+    const tmpWav = path.join(__dirname, '../temp', `tts_${this.botId}.wav`);
     const { speakToFile } = require('./tts');
-
+    
     try {
       await speakToFile(text, tmpWav);
-      // Use ffmpeg to convert to raw 48kHz PCM and pipe to our script
+      
       const ffmpeg = spawn('ffmpeg', [
         '-i', tmpWav,
         '-f', 's16le',
@@ -133,61 +134,50 @@ class Bot {
         '-ac', '1',
         'pipe:1'
       ]);
-      ffmpeg.on('error', err => console.error('[Bot] ffmpeg spawn error:', err));
 
       const CHUNK_SIZE = 960 * 2; // 20ms
       let buffer = Buffer.alloc(0);
-      let lastSendTime = Date.now();
+      let startTime = Date.now();
+      let chunksSent = 0;
 
-      try {
-        // Use async iterator to properly throttle the stream
-        for await (const chunk of ffmpeg.stdout) {
+      for await (const chunk of ffmpeg.stdout) {
+        if (!this._active) break;
+        
+        buffer = Buffer.concat([buffer, chunk]);
+        while (buffer.length >= CHUNK_SIZE) {
           if (!this._active) break;
+
+          const pcm = buffer.subarray(0, CHUNK_SIZE);
+          buffer = buffer.subarray(CHUNK_SIZE);
           
-          buffer = Buffer.concat([buffer, chunk]);
-          while (buffer.length >= CHUNK_SIZE) {
-            if (!this._active) break;
-
-            const pcm = buffer.subarray(0, CHUNK_SIZE);
-            buffer = buffer.subarray(CHUNK_SIZE);
-            
-            try {
-              const pcmCopy = Buffer.from(pcm);
-              const opus = this._encoder.encode(pcmCopy, 960);
-              const packet = buildRtp({
-                payloadType: this._payloadType,
-                sequenceNumber: this._sequenceNumber++,
-                timestamp: this._timestamp,
-                ssrc: this._ssrc,
-                payload: opus
-              });
-              this._timestamp += 960;
-              if (this._sendSocket) {
-                this._sendSocket.send(packet, this._remoteTarget.port, this._remoteTarget.ip);
-              }
-            } catch (e) {
-              console.error('[Bot] Encode/Send error:', e.message);
+          try {
+            const pcmCopy = Buffer.from(pcm);
+            const opus = this._encoder.encode(pcmCopy, 960);
+            const packet = buildRtp({
+              payloadType: this._payloadType,
+              sequenceNumber: this._sequenceNumber++,
+              timestamp: this._timestamp,
+              ssrc: this._ssrc,
+              payload: opus
+            });
+            this._timestamp += 960;
+            if (this._sendSocket) {
+              this._sendSocket.send(packet, this._remoteTarget.port, this._remoteTarget.ip);
             }
+          } catch (e) {
+            console.error('[Bot] Encode/Send error:', e.message);
+          }
 
-            // PACE THE AUDIO: Wait 20ms before sending the next 20ms chunk
-            const now = Date.now();
-            const delta = now - lastSendTime;
-            if (delta > 30) {
-              console.warn(`[Bot] ⚠️ Timing Jitter: ${delta}ms (Expected 20ms)`);
-            }
-            lastSendTime = now;
-
-            await new Promise(resolve => setTimeout(resolve, 20));
+          // HIGH-PRECISION PACING
+          chunksSent++;
+          const targetTime = startTime + (chunksSent * 20);
+          const delay = targetTime - Date.now();
+          
+          if (delay > 0) {
+            await new Promise(resolve => setTimeout(resolve, delay));
           }
         }
-      } catch (streamErr) {
-        console.error('[Bot] Stream error:', streamErr.message);
       }
-
-      await new Promise(resolve => {
-        if (ffmpeg.killed || ffmpeg.exitCode !== null) resolve();
-        else ffmpeg.on('close', resolve);
-      });
       if (fs.existsSync(tmpWav)) fs.unlinkSync(tmpWav);
 
     } catch (err) {

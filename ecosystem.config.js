@@ -29,6 +29,8 @@ module.exports = {
         // Bot sends signals back to the Signal Server via its Public Domain
         INTERNAL_SIGNAL_URL: 'https://cagkanvideo.duckdns.org',
         VOSK_MODEL_PATH: './model',
+        // NEW: Tell the bot its own IP so Instance A knows where to send audio
+        BOT_PRIVATE_IP: '10.0.0.146',
       },
     },
   ],

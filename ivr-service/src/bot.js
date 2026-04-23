@@ -50,13 +50,15 @@ class Bot {
       const { data } = await axios.post(`${SIGNAL_URL}/api/bot/join`, { roomId: this.roomId });
       this.botId = data.botId;
       
-      const remoteIp = '127.0.0.1';
+      const remoteIp = data.sendTransport.ip; // Instance A Private IP
+      const myIp = process.env.BOT_PRIVATE_IP || '127.0.0.1'; // Instance B Private IP
+
       const sendPort = data.sendTransport.port;
       const recvPort = data.recvTransport.port;
 
       // 2. Match Codec
       const opusCodec = data.rtpCapabilities.codecs.find(c => c.mimeType.toLowerCase() === 'audio/opus');
-      this._payloadType = opusCodec ? opusCodec.preferredPayloadType : 111;
+      this._payloadType = opusCodec ? opusCodec.preferredPayloadType : 101;
       const channels = opusCodec ? opusCodec.channels : 2;
 
       // 3. Setup Sockets
@@ -64,14 +66,14 @@ class Bot {
       this._recvSocket = dgram.createSocket('udp4');
 
       // 4. Connect Transports
-      await new Promise(resolve => this._sendSocket.bind(0, '127.0.0.1', resolve));
+      await new Promise(resolve => this._sendSocket.bind(0, '0.0.0.0', resolve));
       await axios.post(`${SIGNAL_URL}/api/bot/connect-send`, {
-        roomId: this.roomId, botId: this.botId, ip: '127.0.0.1', port: this._sendSocket.address().port
+        roomId: this.roomId, botId: this.botId, ip: myIp, port: this._sendSocket.address().port
       });
 
-      await new Promise(resolve => this._recvSocket.bind(0, '127.0.0.1', resolve));
+      await new Promise(resolve => this._recvSocket.bind(0, '0.0.0.0', resolve));
       await axios.post(`${SIGNAL_URL}/api/bot/connect-recv`, {
-        roomId: this.roomId, botId: this.botId, ip: '127.0.0.1', port: this._recvSocket.address().port
+        roomId: this.roomId, botId: this.botId, ip: myIp, port: this._recvSocket.address().port
       });
 
       // 5. Create Producer

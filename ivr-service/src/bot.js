@@ -65,13 +65,43 @@ class Bot {
       this._sendSocket = dgram.createSocket('udp4');
       this._recvSocket = dgram.createSocket('udp4');
 
+      const getRandomPort = () => Math.floor(Math.random() * 10000) + 40000;
+
       // 4. Connect Transports
-      await new Promise(resolve => this._sendSocket.bind(0, '0.0.0.0', resolve));
+      let sendPortFound = false;
+      while (!sendPortFound) {
+        try {
+          const p = getRandomPort();
+          await new Promise((resolve, reject) => {
+            this._sendSocket.once('error', reject);
+            this._sendSocket.bind(p, '0.0.0.0', () => {
+              this._sendSocket.off('error', reject);
+              resolve();
+            });
+          });
+          sendPortFound = true;
+        } catch (e) {}
+      }
+
       await axios.post(`${SIGNAL_URL}/api/bot/connect-send`, {
         roomId: this.roomId, botId: this.botId, ip: myIp, port: this._sendSocket.address().port
       });
 
-      await new Promise(resolve => this._recvSocket.bind(0, '0.0.0.0', resolve));
+      let recvPortFound = false;
+      while (!recvPortFound) {
+        try {
+          const p = getRandomPort();
+          await new Promise((resolve, reject) => {
+            this._recvSocket.once('error', reject);
+            this._recvSocket.bind(p, '0.0.0.0', () => {
+              this._recvSocket.off('error', reject);
+              resolve();
+            });
+          });
+          recvPortFound = true;
+        } catch (e) {}
+      }
+
       await axios.post(`${SIGNAL_URL}/api/bot/connect-recv`, {
         roomId: this.roomId, botId: this.botId, ip: myIp, port: this._recvSocket.address().port
       });

@@ -11,6 +11,7 @@ const { spawn } = require('child_process');
 const { OpusEncoder } = require('@discordjs/opus');
 const { buildRtp } = require('./rtp');
 const IVR = require('./ivr');
+const STT = require('./stt');
 
 const axios = axiosBase.create({
   httpsAgent: new https.Agent({  
@@ -30,6 +31,7 @@ class Bot {
       onLeave: () => this.leave(),
       onSpeak: (text) => this.speakToRoom(text)
     });
+    this._stt = new STT();
     
     // For sending audio (48kHz mono Opus)
     this._encoder = new OpusEncoder(48000, 1);

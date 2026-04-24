@@ -33,6 +33,7 @@ class Bot {
     this._sequenceNumber = 0;
     this._timestamp = 0;
     this._payloadType = 101;
+    this._interruptSpeech = false;
 
     // Components
     this._stt = new STT();
@@ -132,9 +133,6 @@ class Bot {
           lastLogTime = now;
         }
 
-        // CPU SAVER: Ignore user audio while bot is talking to save CPU for the voice
-        if (this._isSpeaking) return;
-
         const rtp = parseRtp(buf);
         if (rtp && this._active) {
           // Ignore RTCP control packets
@@ -169,7 +167,9 @@ class Bot {
 
   async speakToRoom(text) {
     if (!this._active) return;
-    this._isSpeaking = true; // PAUSE STT ENGINE
+    this._interruptSpeech = true; // Interrupt any previous speech
+    await new Promise(resolve => setTimeout(resolve, 50)); // Small gap
+    this._interruptSpeech = false;
 
     const tmpWav = path.join(__dirname, '../temp', `tts_${this.botId}.wav`);
     const { speakToFile } = require('./tts');
@@ -195,7 +195,7 @@ class Bot {
         
         buffer = Buffer.concat([buffer, chunk]);
         while (buffer.length >= CHUNK_SIZE) {
-          if (!this._active) break;
+          if (!this._active || this._interruptSpeech) break;
 
           const pcm = buffer.subarray(0, CHUNK_SIZE);
           buffer = buffer.subarray(CHUNK_SIZE);
